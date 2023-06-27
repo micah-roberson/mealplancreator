@@ -1,6 +1,6 @@
 # mealplancreator
 
-python code that creates a meal plan that has perfect micro nutrition, price optimization, and specified macro nutrients
+python code(postgresql) that creates a meal plan that has perfect micro nutrition, price optimization, and specified macro nutrients
 
 
 When dealing with large datasets, optimizing the code can significantly improve performance. Here are some optimizations you can implement for the given code:
