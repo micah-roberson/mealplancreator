@@ -1,77 +1,83 @@
 import random
+import csv
+import psycopg2
 
-# Recipe dictionary with nutritional information and price
-recipes = {
-    'Omelette': {'vitamin_a': 10, 'vitamin_c': 20, 'iron': 15, 'calories': 300, 'price': 2.5},
-    'Salad': {'vitamin_a': 30, 'vitamin_c': 40, 'iron': 5, 'calories': 200, 'price': 3.0},
-    'Smoothie': {'vitamin_a': 20, 'vitamin_c': 30, 'iron': 10, 'calories': 150, 'price': 2.0},
-    # Add more recipes and their nutritional information here
-}
+# Establish a connection to the PostgreSQL database
+conn = psycopg2.connect(
+    host="your_host",
+    database="your_database",
+    user="your_user",
+    password="your_password"
+)
+
+# Create a cursor to execute SQL queries
+cur = conn.cursor()
 
 # Required daily intake of vitamins, minerals, calories, and budget
 required_intake = {'vitamin_a': 100, 'vitamin_c': 100, 'iron': 100, 'calories': 2000, 'budget': 20.0}
 
-# Function to calculate the total nutritional content, calories, and cost of a meal plan
-def calculate_nutritional_content(meal_plan):
-    total_nutrition = {key: 0 for key in required_intake}
-    for meal in meal_plan:
-        for nutrient in meal:
-            total_nutrition[nutrient] += meal[nutrient]
-    return total_nutrition
+# Function to load recipe data from CSV files
+def load_recipe_data(csv_folder):
+    recipes = []
+    # Iterate through each CSV file in the specified folder
+    for filename in csv_folder:
+        with open(filename, 'r') as file:
+            reader = csv.DictReader(file)
+            # Read each row in the CSV file and append it to the recipes list
+            for row in reader:
+                recipes.append(row)
+    return recipes
 
 # Generate a random meal plan for a week
-def generate_meal_plan():
-    meal_plan = []
-    for _ in range(7):  # 7 days in a week
-        meal = random.choice(list(recipes.keys()))
-        meal_plan.append(recipes[meal])
+def generate_meal_plan(recipes):
+    meal_plan = random.sample(recipes, 7)  # Select 7 random recipes from the loaded recipes
     return meal_plan
 
 # Check if a meal plan meets the required nutritional intake, calorie count, and budget
-def is_meal_plan_valid(meal_plan):
-    total_nutrition = calculate_nutritional_content(meal_plan)
-    for nutrient in total_nutrition:
-        if total_nutrition[nutrient] < required_intake[nutrient]:
-            return False
-    total_calories = total_nutrition['calories']
-    if total_calories != required_intake['calories']:
-        return False
-    total_budget = calculate_total_budget(meal_plan)
-    if total_budget > required_intake['budget']:
-        return False
-    return True
+def is_meal_plan_valid(meal_plan, total_nutrition, total_budget):
+    for meal in meal_plan:
+        for nutrient, value in meal.items():
+            if nutrient in total_nutrition:
+                total_nutrition[nutrient] += float(value)
+    return (
+        all(total_nutrition[nutrient] >= required_intake[nutrient] for nutrient in total_nutrition) and
+        total_nutrition['calories'] == required_intake['calories'] and
+        total_budget <= required_intake['budget']
+    )
 
 # Calculate the total budget of a meal plan
 def calculate_total_budget(meal_plan):
-    total_budget = 0
-    for meal in meal_plan:
-        total_budget += meal['price']
-    return total_budget
+    return sum(float(meal['price']) for meal in meal_plan)
 
-# Filter recipes based on specified macro nutrients
-def filter_recipes_by_macro(recipe_list, macro, min_value, max_value):
-    filtered_recipes = []
-    for recipe in recipe_list:
-        if min_value <= recipe[macro] <= max_value:
-            filtered_recipes.append(recipe)
-    return filtered_recipes
+# Specify the folder path containing the CSV files
+csv_folder = 'path/to/csv/folder'
+
+# Load recipe data from the CSV files
+recipes = load_recipe_data(csv_folder)
 
 # Keep generating meal plans until a valid one is found
-meal_plan = generate_meal_plan()
-while not is_meal_plan_valid(meal_plan):
-    meal_plan = generate_meal_plan()
+meal_plan = generate_meal_plan(recipes)
+total_nutrition = {key: 0 for key in required_intake}
+total_budget = calculate_total_budget(meal_plan)
+while not is_meal_plan_valid(meal_plan, total_nutrition, total_budget):
+    meal_plan = generate_meal_plan(recipes)
+
+# Export the meal plans to a CSV file
+output_file = 'meal_plans.csv'
+with open(output_file, 'w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(['Day', 'Recipe Name'])
+    for i, meal in enumerate(meal_plan, 1):
+        writer.writerow([f'Day {i}', meal['recipe_name']])
+    print(f"Meal plans exported to {output_file}")
 
 # Print the final meal plan and nutritional content
-for i, meal in enumerate(meal_plan, 1):
-    print(f"Day {i}: {list(recipes.keys())[list(recipes.values()).index(meal)]}")
 print("------")
 print("Total Nutritional Content:")
-for nutrient, value in calculate_nutritional_content(meal_plan).items():
+for nutrient, value in total_nutrition.items():
     print(f"{nutrient}: {value}")
-print(f"Total Budget: {calculate_total_budget(meal_plan)}")
+print(f"Total Budget: {total_budget}")
 
-# Example: Filter recipes based on specified macro nutrients
-filtered_recipes = filter_recipes_by_macro(list(recipes.values()), 'calories', 100, 250)
-print("Filtered Recipes:")
-for recipe in filtered_recipes:
-    print(list(recipes.keys())[list(recipes.values()).index(recipe)])
+# Close the database connection
+cur.close()
+conn.close()
